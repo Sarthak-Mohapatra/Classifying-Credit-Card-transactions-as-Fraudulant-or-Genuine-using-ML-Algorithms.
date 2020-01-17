@@ -27,6 +27,14 @@ The dataset contains the following variables:
 - Amount - The total amount for which the transaction was being done
 - Class - A categorical variable which can take values 0 or 1. (0 -> Not Fraud and 1 -> Fraud)
 
+The below snapshot, shows the correlation among variables after the application of PCA:
+![Variable Correlation Plot](https://github.com/Sarthak-Mohapatra/Credit-Card-Fraud-Detection./blob/master/Correlation%20Plot)
+
+We can see that there are not much correlation between variables and only few variables have small correlation (not significant) with Time or Amount field. The reason is because of PCA transformation. The variables with possible correlation are transformed into linear uncorrelated variables using orthogonal transformation.
+
+The below heat-map shows the numerical correlation among variabe:
+![Heat-Map Plot](https://github.com/Sarthak-Mohapatra/Credit-Card-Fraud-Detection./blob/master/Heat-Map)
+
 ## Technologies and Methods
 - R-Studios
 - Microsoft Excel (XML)
