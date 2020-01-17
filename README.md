@@ -41,7 +41,7 @@ The below heat-map shows the numerical correlation among variabe:
 - Logistic Regression
 - K Nearest Neighbour
 
-I am currently building model using Decision Trees and Random Forest methods and checking the accuracy and effectiveness of models.
+I am currently building model using Decision Trees and Random Forest methods and checking the accuracy and effectiveness of models. Based on the various performance measures of each model, the final and best model will be selected.
 
 ## Status
 Project is: *in progress*
