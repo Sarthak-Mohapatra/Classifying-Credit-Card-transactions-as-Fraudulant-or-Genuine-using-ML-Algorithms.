@@ -1,0 +1,201 @@
+---
+title: "Fraud Identification in Credit Cards"
+author: "Sarthak Mohapatra"
+date: "29/10/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(digits = 4)
+options(scipen=999)
+```
+
+**Loading all the required packages In case if the package is not installed, pacman will install it and then load it.**
+
+```{r loadpackages}
+pacman::p_load(data.table, forecast, leaps, tidyverse, caret, corrplot, glmnet, mlbench, ggplot2, gplots, pivottabler,MASS,
+               e1071, fpp2, gains, pROC, knitr, gplots, FNN, RColorBrewer)
+```
+
+```{r importnread-dataset}
+##
+## Reading the I/P dataset named creditcard.csv from the working directory.
+##
+getwd()
+input_file_card <- read.csv("creditcard.csv")
+na.omit(input_file_card)
+table(is.na(input_file_card))
+##
+## Displaying basic statistcs and checking dimension of the I/P file.
+##
+head(input_file_card)
+dim(input_file_card)
+summary(input_file_card)
+
+input_file_card[input_file_card$Class == "1",]
+##
+```
+
+**Checking for the co-relation between various fields with co-relation matrix and heat-map. Since this file is in PCA transformed, we shouldn't get any co-relation between fields.**
+
+```{r corelation_matrix}
+options(scipen=999)
+print("The co-relation matrix is displayed below:")
+cor(input_file_card[,]) 
+##
+##
+print("The heat map is displayed below:")
+corrplot(cor(input_file_card), method = "color", type = "lower", order = "hclust", tl.srt = 45)
+my_palette <- colorRampPalette(c("forestgreen", "darkgreen", "black"))(n = 1000)
+heatmap.2(cor(input_file_card[,]), col=brewer.pal(n = 9, "YlOrRd"), cellnote = round(cor(input_file_card[,]),2), dendrogram = "none",
+           key = FALSE, trace = "none", margins = c(10,10),
+           notecol = "black")
+##
+## Checking the data linearity with scatter-plots. 
+##
+ggplot(input_file_card) + 
+  geom_point(aes(x=Time, y=Amount, color=factor(Class)),alpha=0.4) + ggtitle("Amount ~ Time Relationship")
+
+plot(input_file_card$V2, (input_file_card$Amount), col=factor(input_file_card$Class), pch=18, xlab='V2', ylab ='Transaction Amount', main='Amount ~ V2')
+plot(input_file_card$V4, input_file_card$Amount, col=factor(input_file_card$Class), pch=18, xlab='V4', ylab ='Transaction Amount', main='Amount ~ V4')
+plot(input_file_card$V5, input_file_card$Amount, col=factor(input_file_card$Class), pch=18, xlab='V5', ylab ='Transaction Amount', main='Amount ~ V5')
+plot(input_file_card$V8, input_file_card$Amount, col=factor(input_file_card$Class), pch=18, xlab='V8', ylab ='Transaction Amount', main='Amount ~ V8')
+```
+
+**Now we will be using different classification algorithms for classification. For that, we will be dividing the data into training and validation dataset with 80% into training data and 20% into validation dataset.** 
+
+```{r datapartitioning}
+## Spliting and creating the training and validation dataset after finding the rows to split on.
+set.seed(42)
+dim(input_file_card)[1]
+train.card.index <- sample(row.names(input_file_card), 0.8*dim(input_file_card)[1])  
+valid.card.index <- setdiff(row.names(input_file_card), train.card.index)  
+train.card <- input_file_card[train.card.index, ]
+valid.card <- input_file_card[valid.card.index, ]
+table(is.na(train.card))
+table(is.na(valid.card))
+
+table(valid.card$Class)
+table(train.card$Class)
+```
+
+**First we will use logistic regression technique to detect fraud**
+
+```{r logisticregression}
+logit.reg.cards <- glm(Class ~ ., data = train.card, family = "binomial") 
+summary(logit.reg.cards)
+
+## Generate odds-ratios
+exp(coef(logit.reg.cards))
+```
+
+## Model Selection
+```{r modelSelection,warning=FALSE, message=FALSE}
+logitnew_cards <- stepAIC(logit.reg.cards, trace = 0)  # trace = 0 suppress intermediate steps
+logitnew_cards
+summary(logitnew_cards)
+```
+
+
+logit.new <- glm(Class ~ Time + V1 + I(V1*Time) + V2 + I(V1*V2) + I(V2*Amount) + V3 + I(V3*Time) + V4 + V5 + I(V5*Time) + V6 + V8 + V10 + V13 + V14 + V16 + V21 + V22 + Amount, family = "binomial", data = train.card)
+logit.new
+summary(logit.new)
+
+```{r logit-redefined, warning=FALSE, message=FALSE}
+logit.new <- glm(Class ~ V1 + V2 + I(V1*V2) + I(V2*Amount) + V3 + V4 + V5 + V6 + V8 + V10 + V13 + V14 + V16 + V21 + V22 + Amount, family = "binomial", data = train.card)
+logit.new
+summary(logit.new)
+```
+
+
+```{r perfEval}
+## type = response gives us probability and we can create classification
+logit.reg.cards.pred.test <- predict(logitnew_cards, valid.card[,], type = "response")
+logit.new.pred <- predict(logit.new, valid.card[,], type = "response")
+## generate confusion matrix
+confusionMatrix(as.factor(ifelse(logit.reg.cards.pred.test > 0.0011, '1', '0')), as.factor(valid.card$Class), positive = '1')
+confusionMatrix(as.factor(ifelse(logit.new.pred > 0.0011, '1', '0')), as.factor(valid.card$Class), positive = '1')
+```
+
+```{r liftchartsandplots}
+gain_cards <- gains(valid.card$Class, logit.reg.cards.pred.test)
+gain_cards
+## Plot Lift Chart
+class.lift <- valid.card$class
+plot(c(0,gain_cards$cume.pct.of.total*sum(as.numeric(class.lift)))~c(0,gain_cards$cume.obs), 
+     xlab = "# cases", ylab = "Cumulative", main = "", type = "l")
+lines(c(0,sum(class.lift) ~ c(0, dim(valid.card)[1]), lty = 5))
+
+## Plot decile-wise chart
+heights.chart <- gain_cards$Mean.Resp/mean(as.numeric(valid.card$class)),
+
+midpoints <- barplot(heights.chart, names.arg = gain_cards$depth,  ylim = c(0,9), col = "gold3",  
+                     xlab = "Percentile", ylab = "Mean Response", 
+                     main = "Decile-wise lift chart")
+
+```
+
+**We will now use KNN Classification technique for classifying Frauds**
+
+```{r normalizingdata}
+# create copies
+train.norm.card <- train.card
+valid.norm.card <- valid.card
+  
+# Normalize data using preProcess() from CARET
+set.seed(111)
+norm.values.card <- preProcess(train.norm.card[,-c(31)], method=c("center", "scale"))
+norm.values.card
+train.norm.card <- predict(norm.values.card, train.norm.card)
+valid.norm.card <- predict(norm.values.card, valid.norm.card)
+```
+
+```{r runningknnclassification}
+## run knn using FNN package
+nn.cards <- knn(train = train.norm.card[,1:30], test = valid.norm.card[,1:30], 
+          cl = train.norm.card[,31], k = 3)
+## Nearest-neighbor Index (ratio of observed distance divided by the expected distance)
+row.names(train.norm.card)[attr(nn.cards, "nn.index")]
+
+## Chooose optimal K
+
+## Initialize a data frame with two columns: k and accuracy
+accuracy.df <- data.frame(k = seq(1, 7, 1), accuracy = rep(0, 7))
+  # compute knn for different k on validation
+for(i in 1:7) {
+  knn.pred <- knn(train = train.norm.card[,1:30], test = valid.norm.card[,1:30], 
+                  cl = train.norm.card[,31], k = i)
+  accuracy.df[i, 2] <- confusionMatrix(nn.cards, as.factor(valid.norm.card[, 31]))$overall[1] 
+}
+accuracy.df
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
